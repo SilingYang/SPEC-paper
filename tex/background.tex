@@ -45,7 +45,7 @@ The attention weights, computed from \( Q \) and \( K \), represent token releva
 	\label{fig:pkvloading}
 \end{figure}
 
-\subsection{Shared Prefixes and Storage System}
+\subsection{\zrdnew{Impact of Long Contexts and Prefix Reuse}}
 \label{sec:iobottleneck}
 \noindent \textbf{Long TTFT due to the use of context-rich prefixes.}
 \fvc{Directly using large models for inference may yield suboptimal results. Specifically, when asked about recent events absent from the training data, the model can produce incorrect or misleading responses due to issues~\cite{siren-arxiv23}. To enhance response quality, applications often augment user \textit{queries} with context-rich \textit{prefixes}, forming complete \textit{requests} that are fed into the LLM as input sequences.
@@ -58,7 +58,7 @@ For example, Retrieval-Augmented Generation (RAG)~\cite{rag-nips20} retrieves ex
 %Besides, it also degrades the system's overall throughput and increases the enterprise costs.	
 %This paper focuses on reducing TTFT during the prefill phase without altering the decoding phase. Note that shortening TTFT also reduces decoding latency for other requests, as modern systems use continuous batching, where the decoding of existing and newly-arrived requests are processed together after the completion of the prefill of the new requests~\cite{orca-osdi22}.
 
-\noindent \textbf{Prefix KV storage systems and I/O bottleneck.}
+\noindent \textbf{Mitigating latency via Prefix KV reuse.}
 Researchers have observed that these prefixes are often partially or completely shared across different requests~\cite{sglang-arxiv23, chunkattention-arxiv24, cachegen-sigcomm24, ragcache-arxiv24, promptcache-mlsys24, attentionstore-atc24}. For example, similar queries might retrieve partially or entirely the same related documents using RAG; the same GPT plugin can be used multiple times, resulting in identical system prompts across requests. 
 Recomputing the K and V tensors in Figure~\ref{fig:llm} for the same prefix leads to wasted computational resources and increased TTFT. To optimize TTFT, existing systems store and reuse the K and V tensors of these shared prefixes (referred to as \textit{prefix KV cache} or simply \textit{prefix KV}). Note that the Q tensor of the prefix is not stored, as it is not needed for subsequent computations~\cite{attentionstore-atc24}. When a new request with a repeated prefix arrives, the system asynchronously preloads its prefix KVs into GPU memory, thereby reducing TTFT during the prefill phase of the new request.
 \begin{figure}
@@ -71,72 +71,64 @@ Recomputing the K and V tensors in Figure~\ref{fig:llm} for the same prefix lead
 	\label{fig:pload-bottleneck}
 	\vspace{-0.15in}
 \end{figure}
-\cp{\subsection{Limitations of Existing Prefix KV Storage Systems}}
-\begin{table}[t]
-	\centering
-	\caption{\cp{Comparison of prefix KV storage designs.}}
-	\label{tab:pkv_comparison}
-	\setlength{\tabcolsep}{3pt}  
-	\renewcommand{\arraystretch}{1.15}
-		\begin{tabular}{lccccc}
-			\specialrule{1.2pt}{0pt}{2pt}
-			\textbf{System} & \makecell{\textbf{CPU}\\\textbf{Memory}} & \textbf{Disk} & \makecell{\textbf{Import.}\\\textbf{Aware}} & \textbf{Caching} & \textbf{Prefetching} \\
-			\specialrule{1.2pt}{0pt}{2pt}
-			\textit{PromptCache}~\cite{promptcache-mlsys24} & \cmark & \xmark & \xmark & \cmark & \cmark \\
-			\textit{SGLang}~\cite{sglang-arxiv23}           & \cmark & \xmark & \xmark & \cmark & \cmark \\
-			\textit{RAGCache}~\cite{ragcache-arxiv24}       & \cmark & \xmark & \xmark & \cmark & \cmark \\
-			\textit{ChunkAttention}~\cite{chunkattention-arxiv24} & \cmark & \xmark & \xmark & \xmark & \cmark \\
-			\textit{AttentionStore}~\cite{attentionstore-atc24}   & \cmark & \cmark & \xmark & \cmark & \cmark \\
-			\textit{IMPRESS}~\cite{impress-fast25}          & \cmark & \cmark & \cmark & \cmark & \xmark \\
-			\textit{\pname{} (Ours)}          & \cmark & \cmark & \cmark & \cmark & \cmark \\
-			\specialrule{1.2pt}{0pt}{2pt}
-		\end{tabular}
-\end{table}
+\zrdnew{\subsection{Limitations of Existing Prefix KV Management Systems}}
+%\begin{table}[t]
+%	\centering
+%	\caption{\cp{Comparison of prefix KV storage designs.}}
+%	\label{tab:pkv_comparison}
+%	\setlength{\tabcolsep}{3pt}  
+%	\renewcommand{\arraystretch}{1.15}
+%		\begin{tabular}{lccccc}
+%			\specialrule{1.2pt}{0pt}{2pt}
+%			\textbf{System} & \makecell{\textbf{CPU}\\\textbf{Memory}} & \textbf{Disk} & \makecell{\textbf{Import.}\\\textbf{Aware}} & \textbf{Caching} & \textbf{Prefetching} \\
+%			\specialrule{1.2pt}{0pt}{2pt}
+%			\textit{PromptCache}~\cite{promptcache-mlsys24} & \cmark & \xmark & \xmark & \cmark & \cmark \\
+%			\textit{SGLang}~\cite{sglang-arxiv23}           & \cmark & \xmark & \xmark & \cmark & \cmark \\
+%			\textit{RAGCache}~\cite{ragcache-arxiv24}       & \cmark & \xmark & \xmark & \cmark & \cmark \\
+%			\textit{ChunkAttention}~\cite{chunkattention-arxiv24} & \cmark & \xmark & \xmark & \xmark & \cmark \\
+%			\textit{AttentionStore}~\cite{attentionstore-atc24}   & \cmark & \cmark & \xmark & \cmark & \cmark \\
+%			\textit{IMPRESS}~\cite{impress-fast25}          & \cmark & \cmark & \cmark & \cmark & \xmark \\
+%			\textit{\pname{} (Ours)}          & \cmark & \cmark & \cmark & \cmark & \cmark \\
+%			\specialrule{1.2pt}{0pt}{2pt}
+%		\end{tabular}
+%\end{table}
 
+\zrdnew{An effective prefix KV management system must satisfy two key requirements. First, it must provide sufficient storage capacity to hold a large number of prefix KVs. Second, it must ensure low latency for retrieving prefix KVs, as excessive loading delay can become a bottleneck in LLM inference and limit the reduction of TTFT.
+To achieve these goals, techniques such as caching, prefetching, and importance-aware retrieval are often employed. However, existing systems fail to satisfy both requirements simultaneously. They typically prioritize either low latency at the expense of storage capacity or provide sufficient capacity but suffer from high I/O latency.}
 
-\cp{An effective prefix KV storage system must satisfy two key requirements. First, it must provide sufficient storage capacity to hold a large number of prefix KVs. Second, it must ensure low latency for prefetching prefix KVs, as excessive loading delay can become a bottleneck in LLM inference and limit the reduction of time-to-first-token (TTFT).
-To achieve these goals, techniques such as caching, prefetching, and importance-aware loading  
-are often employed to reduce I/O overhead and improve end-to-end efficiency. 
-However, as summarized in Table~\ref{tab:pkv_comparison}, 
-existing systems optimize only a subset of these dimensions, 
-and none achieves a comprehensive solution across all aspects.}
-
-\cp{\paragraph{KV stores using only GPU/CPU memory.}  
+\noindent
+\zrdnew{\noindent \textbf{Memory-Centric Systems: The Capacity Wall.}  
 Systems such as PromptCache~\cite{promptcache-mlsys24}, 
 SGLang~\cite{sglang-arxiv23}, 
 RAGCache~\cite{ragcache-arxiv24}, 
 and ChunkAttention~\cite{chunkattention-arxiv24} 
-store prefix KVs solely in GPU and/or CPU memory to minimize prefetch latency, 
+store prefix KVs solely in GPU and/or CPU memory to ensure low retrieval latency, 
 as illustrated in Figure~\ref{fig:pkvloading}(c). 
-This design achieves low TTFT by avoiding I/O operations and typically employs caching and prefetching 
-to further reduce latency. 
+This design achieves low TTFT by leveraging the high bandwidth of GPU and CPU memory for rapid data access.
 However, GPU and CPU memory are inherently capacity-limited, 
 causing these systems to quickly exhaust available storage in RAG workloads. 
-For example, with OPT-30B in FP16, the KV cache is 1.31 MB per token; an 8,000-token retrieved prefix consumes 11 GB, and eight concurrent sessions require 88 GB which exceeds a single 80 GB GPU like A100.}
+For example, with OPT-30B in FP16, the KV cache is 1.31 MB per token; an 8k-token retrieved prefix consumes 11 GB, and eight concurrent sessions require about 88 GB, which alone exceeds the capacity of a single 80 GB A100 GPU.}
 
-\cp{\paragraph{KV stores using CPU memory and disks.}  
-To overcome the capacity constraint, 
-AttentionStore~\cite{attentionstore-atc24} stores prefix KVs across both CPU memory and disks, 
-providing sufficient capacity for large-context inference. 
-However, reading data from disk is inherently slow. 
-To mitigate this issue, AttentionStore leverages layer-level parallelism by prefetching the KVs 
-for the next Transformer layer while the current layer is being computed, as shown in Figure~\ref{fig:pkvloading}(d). 
-Nevertheless, the data transfer from SSD to GPU remains slow, 
-and the latency cannot be fully hidden by computation, 
-especially under heavy or preemptive workloads. As shown in Figure~\ref{fig:pload-bottleneck}, 
-loading prefix KVs from SSD still leads to a substantial increase in TTFT, 
-as I/O latency accounts for 51\% to 98\% of the total and rarely overlaps completely with query computation.}
+\noindent
+\zrdnew{\noindent \textbf{Disk-Based Systems: The Bandwidth Bottleneck.}  
+To overcome capacity constraints, 
+AttentionStore~\cite{attentionstore-atc24} extends the storage hierarchy to include local disks, 
+providing sufficient scalability for large-context inference. 
+However, retrieving data from disk incurs high I/O latency. 
+To mitigate this, AttentionStore employs layer-wise prefetching to overlap data loading 
+with the current layer's computation, as shown in Figure~\ref{fig:pkvloading}(d). 
+Despite these prefetching efforts, the system remains severely bottlenecked by the limited I/O bandwidth of SSDs and PCIe.
+Consequently, the massive data transfer latency cannot be fully hidden by computation, 
+especially under heavy or preemptive workloads. As evidenced in Figure~\ref{fig:pload-bottleneck}, 
+loading prefix KVs from SSD leads to a substantial increase in TTFT,  where I/O latency accounts for 51\% to 98\% of the total time.}
 
-	
-
-\cp{\paragraph{Importance-aware KV store.}  
-To mitigate the I/O bottleneck caused by loading prefix KVs from disk, IMPRESS~\cite{impress-fast25} introduces a novel approach that loads only the most important KVs to reduce I/O latency while maintaining comparable model accuracy. However, these selected KVs still lie on the critical path of model inference, as shown in Figure~\ref{fig:pkvloading}(e).
-Although prior systems employ prefetching to overlap data loading with model computation by fetching all KVs in advance, 
-this strategy fails in IMPRESS. 
-Since IMPRESS loads only the most important KVs, 
-the selection of these KVs for the next layer depends on the computation results of the current layer. 
-As a result, the system cannot determine in advance which KVs to prefetch, and their I/O latency remains exposed on the critical path, limiting end-to-end inference efficiency.}
-
+\noindent
+\zrdnew{\noindent \textbf{Importance-Aware Systems: The Serial Dependency.}  
+To address the bandwidth bottleneck, IMPRESS~\cite{impress-fast25} employs importance-informed sparse retrieval, effectively minimizing the I/O volume.
+However, this selectivity comes at the cost of parallelism.
+The identification of important KVs for the next layer relies on the runtime attention activation of the current layer, forming a strict read-after-compute dependency.
+This dependency renders the standard layer-wise prefetching mechanism inapplicable, as the system cannot determine target KVs in advance.
+As a result, I/O operations cannot be overlapped with computation and remain exposed on the critical path, as shown in Figure~\ref{fig:pkvloading}(e), limiting the potential reduction in TTFT.}
 
 
 
@@ -169,15 +161,15 @@ As a result, the system cannot determine in advance which KVs to prefetch, and t
 
 
 
-\subsection{Not All KVs Are Equally Important}
-Recent research~\cite{h2o-nips23, infinigen-osdi24, flexgen-icml23, scissorhands-nips23} indicates that not all tokens' KVs are equally important for maintaining LLM inference accuracy. These methods generate and store the full set of KVs during the prefill phase, then  identify and discard the less important tokens' KVs during decoding by analyzing the attention weights. This approach reduces the computational load during the decoding phase while maintaining comparable LLM inference accuracy.
-
-\cp{Inspired by this, we propose an importance-informed three-tiered prefix KV caching and prefetching system that encompasses GPU memory, CPU memory, and disk storage. 
-Our system addresses the disk I/O bottleneck through a three-pronged approach: selective loading, prefetching, and caching. 
-When reusing prefix KVs, we selectively load only important KVs for prefill computations, while discarding those associated with unimportant tokens. 
-To further improve I/O efficiency, we introduce the \technew{} mechanism, which leverages the current layer's important token indices to predict and prefetch the next layer's important KVs during computation, effectively overlapping I/O operations with GPU execution. 
-Meanwhile, frequently reused KVs are retained in the CPU and GPU cache hierarchy to avoid redundant disk reads in subsequent decoding steps. 
-This integrated design of selective loading, cross-layer prefetching, and hierarchical caching fundamentally alleviates the disk bottleneck by reducing the total I/O volume and shifting critical I/O operations off the inference path, thereby significantly reducing TTFT.}
+%\subsection{Not All KVs Are Equally Important}
+%Recent research~\cite{h2o-nips23, infinigen-osdi24, flexgen-icml23, scissorhands-nips23} indicates that not all tokens' KVs are equally important for maintaining LLM inference accuracy. These methods generate and store the full set of KVs during the prefill phase, then  identify and discard the less important tokens' KVs during decoding by analyzing the attention weights. This approach reduces the computational load during the decoding phase while maintaining comparable LLM inference accuracy.
+%
+%\zrdnew{
+%Inspired by this, we propose \pname{}, an importance-informed caching and prefetching system designed to minimize TTFT.
+%It addresses the disk I/O bottleneck by \textit{selectively loading} only critical KVs to reduce data volume.
+%Crucially, it further hides latency through \technew{}, a mechanism that speculatively prefetches the next layer's KVs based on current-layer signals, effectively overlapping I/O with computation.
+%This combination shifts critical I/O operations off the inference path, significantly improving system performance.
+%}
 %When
 %reusing prefix KVs, we aim to load only important KVs
 %%  rather than fetching them

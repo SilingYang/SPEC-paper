@@ -1,5 +1,13 @@
 \section{Related Work}
 \label{related}
+\zrdnew{\noindent \textbf{Data prefetching for LLM inference.}
+To mitigate I/O bottlenecks, prefetching is widely employed to overlap data transfer with computation. 
+Systems like AttentionStore~\cite{attentionstore-atc24}, FlexGen~\cite{flexgen-icml23}, and TightLLM~\cite{} implement pipelining \textit{layer by layer} but fetch the full KVs of the next layer, failing to leverage token sparsity and incurring high I/O overhead.
+Recent works prioritizing importance attempt to address this. 
+IMPRESS~\cite{impress-fast25} minimizes data volume but suffers from I/O stalls due to serial dependencies between identification and loading.
+InfiniGen~\cite{infinigen-osdi24} introduces speculative prefetching to hide latency, but it targets the \textit{decoding phase} and relies on invasive model weight modifications and extra rehearsal computation.
+In contrast, \pname{} targets the \textit{prefill phase} and employs a heuristic based on similarity with \textit{negligible overhead}. 
+This allows \pname{} to effectively overlap the selective loading of critical KVs with computation without requiring any model alterations.}
 
 \noindent \textbf{KV cache reuse.}
 %Some works~\cite{alluneed-nips17, scaling-mlsys23, vllm-sosp23, flexgen-icml23} focus on reusing previously stored KV caches across different iterations within a request to reduce computation, and optimized memory allocation to support larger KV cache at runtime. These efforts target reducing decoding phase and are orthogonal to \pname{} which targets  prefill phase. Combining them with \pname{} can further accelerate the whole inference process.

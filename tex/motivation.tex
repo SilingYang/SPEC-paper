@@ -14,7 +14,9 @@
 	\caption{The recall ratios and the impacts on model generation quality of the static pre-identification method (SPI) under various important token retention percentages. `ORI' denotes the baseline where the SPI method is not applied.}
 	\label{fig:static_methods}
 \end{figure}
-
+\zrdnew{To satisfy these requirements, we propose HyperInfer.
+HyperInfer minimizes retrieval latency by selectively loading only critical KVs to reduce data volume, and further speculatively prefetching these KVs for future layers to hide I/O overhead.
+However, realizing such an efficient system presents three significant challenges:}
 
 \noindent \textbf{Challenge 1: Importance identification introduces high I/O overhead for prefix KV loading.}
 \fvc{Existing methods identify important KVs by loading all prefix keys (K) into GPU memory~\cite{h2o-nips23, infinigen-osdi24, flexgen-icml23, scissorhands-nips23}, 
@@ -73,12 +75,27 @@ These results motivate a dynamic approach that identifies important tokens per q
 
 \noindent 
 \zrdnew{
-\textbf{Challenge 2: Prefetching mitigates KV loading latency but is infeasible when the important tokens are unknown prior to execution.}
-During inference, prefetching can be performed by loading the KVs required for the next transformer layer in advance, while the current layer is being computed~\cite{attentionstore-atc24}. This technique allows I/O operations and computation to overlap, thereby hiding data loading latency and improving pipeline efficiency. However, in \pname{}, only the important KVs are loaded to reduce unnecessary I/Os. These important KVs for each layer can only be identified after computing that layer's attention weights. This creates a fundamental constraint: when processing \textit{layer k}, the system does not yet know which KVs will be critical for \textit{layer k+1}, since \textit{layer k+1}'s attention computation has not occurred. As a result,  approaches cannot prefetch the next layer's required KVs in advance, leaving I/O bandwidth idle during computation and forcing expensive synchronous loads.}
+\textbf{Challenge 2: Serial dependencies hinder effective prefetching}
+Current systems face a dilemma between bandwidth efficiency and latency hiding.
+Aggressive prefetching methods~\cite{attentionstore-atc24} overlap I/O by loading the entire next layer, but this incurs prohibitive bandwidth costs and cache pollution.
+Conversely, selective loading methods such as IMPRESS~\cite{impress-fast25} minimize data volume but are constrained by strict data dependencies.
+Since identifying critical KVs for the next layer requires the runtime output of the current layer, these systems are forced to execute serially.
+}
 
-\zrdnew{A direct method is to prefetch KV pairs for the next layer based solely on their historical importance, independent of the current query. Under this history-based method, KV pairs that were frequently important in the past are always prioritized.
-%Concretely, for each KV pair in a prefix, we maintain a historical importance score that aggregates how often and how strongly it has contributed to past model outputs (e.g., via accumulated selection frequency). At inference time, we rank KV pairs in the prefix by these scores and prefetch the top-M candidates to GPU for the next layer, regardless of the current query. 
-However, KV importance is highly query-dependent: a token that is critical for one query may be irrelevant for another, making a single global importance score an unreliable proxy for per-request importance. Moreover, obtaining reliable per-KV statistics requires many requests and assumes a relatively stable workload. In \S\ref{exp:prefetch}, we empirically show that this history-based method underperforms our method in prefetch precision and critical-path I/O reduction under the same prefetch budget.}
+\zrdnew{
+One potential strategy to bypass this dependency is to prefetch KVs based on global historical importance, independent of the current query. 
+Under this method using history, KVs that were frequently selected in past requests are prioritized. 
+However, KV importance is highly dependent on the query: a token critical for one query may be irrelevant for another, rendering a single global importance score an unreliable proxy for the needs of each request. 
+Moreover, accumulating reliable statistics for each KV requires extensive warm up and assumes a stationary workload distribution. 
+In \S\ref{exp:prefetch}, we empirically demonstrate that this heuristic driven by history significantly underperforms our method in both prefetch precision and I/O reduction under the same budget.
+}
+%\zrdnew{
+%\textbf{Challenge 2: Prefetching mitigates KV loading latency but is infeasible when the important tokens are unknown prior to execution.}
+%During inference, prefetching can be performed by loading the KVs required for the next transformer layer in advance, while the current layer is being computed~\cite{attentionstore-atc24}. This technique allows I/O operations and computation to overlap, thereby hiding data loading latency and improving pipeline efficiency. However, in \pname{}, only the important KVs are loaded to reduce unnecessary I/Os. These important KVs for each layer can only be identified after computing that layer's attention weights. This creates a fundamental constraint: when processing \textit{layer k}, the system does not yet know which KVs will be critical for \textit{layer k+1}, since \textit{layer k+1}'s attention computation has not occurred. As a result,  approaches cannot prefetch the next layer's required KVs in advance, leaving I/O bandwidth idle during computation and forcing expensive synchronous loads.}
+%
+%\zrdnew{A direct method is to prefetch KV pairs for the next layer based solely on their historical importance, independent of the current query. Under this history-based method, KV pairs that were frequently important in the past are always prioritized.
+%%Concretely, for each KV pair in a prefix, we maintain a historical importance score that aggregates how often and how strongly it has contributed to past model outputs (e.g., via accumulated selection frequency). At inference time, we rank KV pairs in the prefix by these scores and prefetch the top-M candidates to GPU for the next layer, regardless of the current query. 
+%However, KV importance is highly query-dependent: a token that is critical for one query may be irrelevant for another, making a single global importance score an unreliable proxy for per-request importance. Moreover, obtaining reliable per-KV statistics requires many requests and assumes a relatively stable workload. In \S\ref{exp:prefetch}, we empirically show that this history-based method underperforms our method in prefetch precision and critical-path I/O reduction under the same prefetch budget.}
 
 %\zrdnew{A straightforward alternative is to randomly prefetch KVs for the next layer without considering their importance, 
 %but this approach suffers from low prefetch precision and loads numerous unimportant tokens’ KVs into GPU memory, wasting I/O bandwidth.}

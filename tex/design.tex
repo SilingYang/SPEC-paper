@@ -39,22 +39,36 @@ In the data plane, all prefix key–value (KV) pairs are stored on disks in chun
 \end{figure}
 
 
+%\noindent \textbf{Dataflow of \pname{}.} 
+%\cp{Assume that a request $S=[t^p_0,...,t^p_{m}, t^q_0, ...,t^q_{n}]$ arrives.
+%$m$ is the number of tokens in the prefix and $n$ is the number of tokens in the query.
+%$t^p$ and $t^q$ denote the prefix and non-prefix tokens, respectively. 
+%First, given the request, \pname{} queries the database to find the longest common 
+%prefix subsequence from all previous requests~\cite{sglang-arxiv23, chunkattention-arxiv24}. 
+%Let's assume that the entire prefix $R=[t^p_0,...,t^p_{m}]$ is found in the database, and its corresponding key--value (KV) pairs are stored across GPU memory, CPU memory, or disks.
+%Next, \pname{} identifies the important tokens within $R$, assuming $R_{important}=[t^p_{t}, t^p_{t+1}, ..., t^p_s]$ 
+%($ 0 \leq t \leq s \leq m$) is identified (\cref{sec:techa}).
+%If the KVs in $R_{important}$ are not in GPU memory, they are loaded from lower memory tiers (CPU or disk) (\cref{sec:techb}).
+%During this process, the system also predicts the next set of important KVs and proactively prefetches them to overlap I/Os with computation, thereby further mitigating data access latency (\cref{sec:technew}). 
+%Both the important KVs and any incorrectly prefetched KVs are passed to the LLM for computation, whereas other KVs of unimportant tokens in $R$ are discarded and do not participate in subsequent inference. 
+%Then, the loaded $R_{\text{important}}$ and the query tokens enter the LLM model, completing the remaining computations in the prefill phase. 
+%The decoding phase remains unchanged, following existing systems~\cite{alluneed-nips17}.}
+
 \noindent \textbf{Dataflow of \pname{}.} 
-\cp{Assume that a request $S=[t^p_0,...,t^p_{m}, t^q_0, ...,t^q_{n}]$ arrives.
-$m$ is the number of tokens in the prefix and $n$ is the number of tokens in the query.
+\zrdnew{Assume that a request $S=[t^p_0, t^p_1, ..., t^p_{m-1}, t^q_0, t^q_1, ..., t^q_{n-1}]$ arrives. 
+$m$ is the number of tokens in the prefix and $n$ is the number of tokens in the query. 
 $t^p$ and $t^q$ denote the prefix and non-prefix tokens, respectively. 
-First, given the request, \pname{} queries the database to find the longest common 
-prefix subsequence from all previous requests~\cite{sglang-arxiv23, chunkattention-arxiv24}. 
-Let's assume that the entire prefix $R=[t^p_0,...,t^p_{m}]$ is found in the database, and its corresponding key--value (KV) pairs are stored across GPU memory, CPU memory, or disks.
-Next, \pname{} identifies the important tokens within $R$, assuming $R_{important}=[t^p_{t}, t^p_{t+1}, ..., t^p_s]$ 
-($ 0 \leq t \leq s \leq m$) is identified (\cref{sec:techa}).
-If the KVs in $R_{important}$ are not in GPU memory, they are loaded from lower memory tiers (CPU or disk) (\cref{sec:techb}).
-During this process, the system also predicts the next set of important KVs and proactively prefetches them to overlap I/Os with computation, thereby further mitigating data access latency (\cref{sec:technew}). 
-Both the important KVs and any incorrectly prefetched KVs are passed to the LLM for computation, whereas other KVs of unimportant tokens in $R$ are discarded and do not participate in subsequent inference. 
-Then, the loaded $R_{\text{important}}$ and the query tokens enter the LLM model, completing the remaining computations in the prefill phase. 
+First, given the request, \pname{} searches the radix tree to find the longest common prefix subsequence from all previous requests~\cite{sglang-arxiv23, chunkattention-arxiv24}. 
+Let's assume the result is $R = [t^p_0, t^p_1, ..., t^p_j]$, whose KVs are stored in GPU memory, CPU memory, or disk. 
+There may also be some prefix tokens $NR = [t^p_{j+1}, ..., t^p_{m-1}]$ that are not in the radix tree, and therefore their KVs do not exist in the system. 
+Next, \pname{} employs the I/O-efficient ITF method to identify the important tokens within $R$, assuming a subset $R_{\text{important}}$ is identified (\cref{sec:techa}). 
+If KVs in $R_{\text{important}}$ are not in GPU memory, they are retrieved from lower memory tiers. 
+During this process, \pname{} employs layer-aware prefetching to speculatively load the next layer's KVs effectively overlapping I/Os with computation (\cref{sec:technew}).
+Crucially, upon verification, any KVs that were speculatively prefetched but identified as unimportant are strictly discarded from the runtime buffer to maintain resource efficiency.
+Consequently, only the loaded $R_{\text{important}}$, the tokens $NR$, and the query tokens $[t^q_0, t^q_1, ..., t^q_{n-1}]$ are sent into the LLM model, completing the remaining computations in the prefill phase. 
+Essentially, $R_{\text{important}}$ plus $NR$ becomes the de facto prefix used in the LLM inference. 
+Finally, the newly generated KVs for the prefix tokens in $NR$ are stored on disk, and the prefix tokens in $NR$ are inserted into the radix tree for future reuse. 
 The decoding phase remains unchanged, following existing systems~\cite{alluneed-nips17}.}
-
-
 
 %Assume that a request $S=[t^p_0, t^p_1,...,t^p_{m-1}, t^q_0, t^q_1,...,t^q_{n-1}]$ arrives.
 %$m$ is the number of tokens in prefix and $n$ is the number of tokens in the query.

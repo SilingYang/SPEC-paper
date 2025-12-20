@@ -3,8 +3,9 @@
 
 \IEEEPARstart{G}{enerative} large language models (LLMs), such as ChatGPT and GPT-4, are increasingly utilized in applications like chatbots~\cite{chatgpt-23, chatbotmed-23}, document summarization~\cite{summarization-23, summarization2-22}, and translation~\cite{gpt4trans-23, goodgpttrans-23} due to their powerful understanding and generation capabilities. To generate more relevant and high-quality responses, these applications often prepend context-rich prefixes to user queries before sending the entire requests to the model for inference. These prefixes may include the latest news retrieved from web searches relevant to the queries~\cite{rag-nips20}, historical conversation with the user~\cite{attentionstore-atc24}, and examples of question-answer pairs~\cite{chameleon-nips23} to guide the model's output format.
 
+\zrdnew{Typically, the LLM inference process comprises two distinct phases: the prefill phase which processes the input prompt to generate the first token, and the decoding phase which generates subsequent tokens autoregressively~\cite{distserve-osdi24, loongserve-arxiv24, splitwise-isca24}.}
 While longer requests enhance the quality of the model's output, they also
-significantly increase response-generation latency, particularly the time to
+significantly increase prefilling latency, particularly the time to
 first token (TTFT). This occurs because the computational complexity of
 processing a request grows superlinearly with its length~\cite{alluneed-nips17}.
 % This poses challenges to user experience, especially in applications like
@@ -51,7 +52,8 @@ we propose an importance-aware, multi-tier prefix KV caching and  prefetching sy
 which leverages GPU memory, CPU memory, and disks to reduce LLM inference latency
 while maintaining comparable output quality. 
 GPU and CPU memory serve as caches for data stored on disks.}
-\zrdnew{The core idea is to load only the KVs of important prefix tokens, minimizing I/Os from slower disks, while prefetching future potentially critical KVs to overlap I/Os with computation, further reducing latency. However, building such an efficient system involves three significant challenges.}
+%\zrdnew{The core idea is to load only the KVs of important prefix tokens, minimizing I/Os from slower disks, while prefetching future potentially critical KVs to overlap I/Os with computation, further reducing latency. However, building such an efficient system involves three significant challenges.}
+\zrdnew{The core idea is to load only the KVs of important prefix tokens, minimizing I/Os from slower disks, and crucially, to speculatively prefetch future critical KVs to overlap I/Os with computation, thereby maximizing latency reduction. However, building such an efficient system involves three significant challenges.}
 %The core idea is to load only the  原文
 %important prefix tokens' KVs, thereby minimizing the I/O data accessed from
 %slower disks. 
@@ -66,7 +68,11 @@ query, which determines the importance of each token's KVs.
 % This comprehensive key loading incurs considerable I/O overhead, especially from disk-based storage, hindering TTFT reduction. Hence, there is a need for a smart approach to identify key tokens while reducing I/O overhead.
 Loading all keys from disk storage significantly impacts I/O efficiency, impeding TTFT reduction. A smarter method to identify key tokens with minimal I/O overhead is essential.
 
-\zrdnew{Second, since the important tokens of each layer are only revealed after computing that layer’s attention scores, they cannot be prefetched during the computation of the previous layer. Existing systems either ignore token importance and randomly prefetch some tokens’ KVs, which leads to low accuracy and wastes I/O bandwidth, or they require changes to model parameters, which introduces extra overhead. Hence, a more effective method is required to identify which tokens’ KVs to prefetch in order to reduce the amount of I/O requests on the critical path.}
+%\zrdnew{Second, since the important tokens of each layer are only revealed after computing that layer’s attention scores, they cannot be prefetched during the computation of the previous layer. Existing systems either ignore token importance and randomly prefetch some tokens’ KVs, which leads to low accuracy and wastes I/O bandwidth, or they require changes to model parameters, which introduces extra overhead. Hence, a more effective method is required to identify which tokens’ KVs to prefetch in order to reduce the amount of I/O requests on the critical path.}
+\zrdnew{Second, the identification of important tokens creates a strict read-after-compute dependency that the system cannot identify critical KVs for the next layer until the current layer's computation finishes.
+Existing strategies face a dilemma: they either waste I/O bandwidth by aggressively loading all KVs~\cite{attentionstore-atc24}, or suffer from I/O stalls by strictly waiting for identification~\cite{impress-fast25}.
+While speculative methods like InfiniGen~\cite{infinigen-osdi24} exist, they target the decoding phase and incur prohibitive overheads for prefix processing.
+Hence, a lightweight mechanism is needed to speculatively prefetch prefix KVs, breaking this dependency to hide I/O latency.}
 % Second, existing systems tend to group together the KVs of tens of 
 % consecutive tokens into a single large object (e.g., a chunk) and manage 
 % them using caches, aiming to enhance disk I/Os and PCIe transfer efficiency. However, since our system selectively reads only the important KVs, directly applying these existing storage and cache management methods is suboptimal for two main reasons. 
@@ -92,7 +98,7 @@ Based on this insight, we propose a \techa{} method that only loads the keys fro
 %\he{a subset of keys} 
 to identify crucial KVs within the entire prefix. 
 
-\zrdnew{To address the second challenge, we leverage the observation that the sets of important token incices are highly similar across neighboring layers. Building on this property, we design the \technew{} mechanism, which uses the important tokens identified in the current layer to approximate those in the subsequent layer. This enables the system to prefetch the next layer’s KVs while the current layer is being computed, effectively overlapping I/Os with computation and further reducing TTFT.
+\zrdnew{To address the second challenge, we exploit the observation that the sets of important token indices are highly similar between adjacent layers. Based on this property, we introduce the \technew{} mechanism to predict the next layer's important tokens using the current layer's results. This enables speculative prefetching of the next layer's crucial KVs during the current layer's execution, thereby masking I/O latency and significantly lowering TTFT.
 }
 
 To address the third challenge, we propose \techb{} methods. 
@@ -108,7 +114,7 @@ The main contributions of this paper are as follows:
 \begin{itemize}
 \item \zrdnew{We present \pname{}, the first importance-informed prefix KV prefetching and caching
 system that integrates three storage tiers: GPU memory, CPU memory and disk.}%
-\item \cp{We propose \technew{} mechanism to prefetch important KVs, effectively overlapping I/Os with computation.}
+\item \cp{We propose the \technew{} mechanism, which exploits the similarity of important tokens across adjacent layers. This allows the system to speculatively prefetch the next layer's KVs, breaking the serial dependency between token identification and loading to fully overlap I/Os with computation.}
 \item We introduce a similarity-guided important token identification method for efficiently locating important KVs, and complement it with \techb{}, which incorporates \techba{} and a new \techbb{} policy to further minimize data movement from slower storage media.
 
 
