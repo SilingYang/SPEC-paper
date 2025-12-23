@@ -151,7 +151,7 @@ As discussed in \cref{sec:llm-basic}, each token has K and V tensors for every h
 We observe that important token indices are highly similar across heads within the same layer, 
 as \(k\) and \(v\) tensors originate from the same large K and V tensors~\cite{alluneed-nips17, opt-arxiv22}. 
 Thus, a token important in one head is likely important in others. 
-While this cannot be formally proven for all LLMs, its generality and practicality are validated through accuracy evaluations (\cref{exp:overall}) on four datasets across three models.
+While this cannot be formally proven for all LLMs, its generality and practicality are validated through accuracy evaluations (\S\ref{exp:overall}) on four datasets across three models.
 
 
 To quantify the similarity between important token index sets, we use the Jaccard index~\cite{jaccard-18}, defined as 
@@ -210,6 +210,7 @@ We have two findings:
 
 %\textbf{Observation 2:} \textit{.}
 
+\noindent
 \textbf{Design}. Based on the above observations, we propose the \techa{} technique. The core idea is that \textit{owing to the high similarity among attention heads, we can use the important token indices identified from a few selected heads to approximate those of the remaining heads}. For simplicity, we refer to these selected heads as \textit{probe heads}. Since this process involves loading only keys from a subset of the heads instead of all heads, it reduces both I/O data volume and TTFT.
 
 As some layers exhibit less pronounced similarity between important token
@@ -274,12 +275,9 @@ Given that modern LLMs have dozens of heads and long prefixes, \techa{} effectiv
 \begin{figure}
 	\centering
 	\includegraphics[width=3.4in]{simiload-ttft.pdf}
-	\caption{\cp{
-			Comparison of TTFTs with various approaches. (a) TTFTs without \techa{}. (b) TTFTs with \techa{}. (c) TTFTs with \technew.
-			Assume the LLM model consists
-			of three transformer layers. The numbers inside the rectangles
-			represent the layer index.
-			The black dashed arrows in (b) indicate the dependency among operations.}}
+	\caption{\zrdnew{
+			Timeline breakdown of TTFT. (a) Without \techa{}. (b) With \techa{}, where black dashed arrows indicate the strict read-after-compute dependency. (c) With \technew, where red-bordered rectangles indicate loading missing KVs. Assume the LLM model consists
+			of three transformer layers. The numbers inside rectangles represent the layer index.}}
 	\label{fig:simiload-ttft}
 \end{figure}
 
