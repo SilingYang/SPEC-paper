@@ -11,6 +11,7 @@
 %We implement \pname{} on top of FlexGen~\cite{flexgen-icml23}, chosen for its white-box model implementation that aids integrating our I/O-efficient KV identification method.
 We chose to implement \pname{} on top of FlexGen~\cite{flexgen-icml23} because its white-box model implementation facilitates the development of our I/O-efficient KV identification method.
  Specifically, we modified the \textit{mha} function for prefix reuse and used values in \textit{attn\_weight} to assess KV importance.
+ \zrdnew{For layer-aware KV prefetching, we implemented the \textit{prefetch} function to execute asynchronously from the main computation flow.}
 For KV reordering, we implemented the \textit{PrefixKVLayer} class to store reordered KVs and mapping lists per layer. 
 For cache management, we developed the \textit{TokenCache} class with our score-based policy.
 }

@@ -8,11 +8,11 @@
 \zrdnew{
 	\textbf{Observation III: }
 %	{Important token indices exhibit strong consistency across adjacent layers of an LLM.} To further analyze the distribution of important token indices, we examine the similarity of the top 25\% important token sets across adjacent layers for different models. As shown in Figure~\ref{fig:ob3}(a), there are two key observations: (1) the important tokens exhibit strong consistency across layers, and (2) tokens with higher importance in one layer are more likely to remain important in the subsequent layer.
-The sets of important token indices are highly similar between adjacent Transformer layers.}
+The sets of important token indices are highly similar between adjacent transformer layers.}
 
 \zrdnew{To quantify this, we compute the similarity between important token index sets across adjacent Transformer layers for several OPT models. In each layer, we select the top 25\% of tokens ranked by their attention-based importance scores, and measure the similarity between this index set and that of the next layer using the Jaccard index~\cite{jaccard-18}. As shown in Figure~\ref{fig:sim_layer}, each bar represents the similarity between two neighboring layers. We find that similarity values are consistently bounded within a relatively tight interval, with the sampled OPT-6.7B model exhibiting similarities across layers that largely fall between 0.40 and 0.85, and an average similarity of 0.48. This indicates that the attention heads in neighboring layers tend to focus on similar token positions. }
 
-\zrdnew{Furthermore, we find that tokens that are more important in one layer tend to remain important in the next layer. As shown in Figure~\ref{fig:layer_wise_r}, we first rank all tokens in each layer by their importance and take the top 25\% as important tokens. Within this important set, we further partition token positions into finer bins according to their relative importance percentiles (e.g., the '0 – 20\%' bin represents the top - 20\% most critical tokens within this set). For each bin, we then measure the recall ratio of important tokens in the next layer, defined as the fraction of tokens in that bin which are still classified as important in the subsequent layer. The resulting curves show that bins containing tokens with higher importance in the current layer consistently achieve larger recall ratios, and all models and datasets exhibit the same overall trend.
+\zrdnew{Furthermore, we find that tokens that are more important in the current layer tend to remain important in the next layer. As shown in Figure~\ref{fig:layer_wise_r}, we first rank all tokens in each layer by their importance and take the top 25\% as important tokens. Within this important set, we further partition token positions into finer bins according to their relative importance percentiles (e.g., the '0 – 20\%' bin represents the top - 20\% most critical tokens within this set). For each bin, we then measure the recall ratio of important tokens in the next layer, defined as the fraction of tokens in that bin which are still classified as important in the subsequent layer. The resulting curves show that bins containing tokens with higher importance in the current layer consistently achieve larger recall ratios, and all models and datasets exhibit the same overall trend.
 }
 
 
@@ -20,7 +20,7 @@ The sets of important token indices are highly similar between adjacent Transfor
 %
 \begin{figure}
 	\centering
-	\includegraphics[width=3.2in, height=0.6in]{sim-25.pdf}
+	\includegraphics[width=3.2in, height=0.65in]{sim-25.pdf}
 	\vspace{-0.1in}
 	\caption{
 		\zrdnew{Similarity of important token index sets between adjacent transformer layers in OPT models.}}
@@ -58,14 +58,16 @@ The sets of important token indices are highly similar between adjacent Transfor
 %In contrast, Figure~\ref{fig:simiload-ttft}(c) shows that using Layer~0’s importance information to guide the prefetching of Layer~1’s KVs during computation effectively hides I/O latency and reduces idle time. 
 %Specifically, the important token positions identified in Layer~0 are used as an approximation of those in Layer~1, allowing the system to prefetch the corresponding key–value pairs of tokens at the same positions in the next layer, making them readily available when computation proceeds.
 %}
-\zrdnew{\textbf{Design.} Based on the above observations, we propose the layer-aware KV prefetching mechanism. The core idea is that owing to the high similarity of important token index sets across adjacent layers, we can utilize the importance distribution of the current layer to approximate and speculatively prefetch the critical KVs for the subsequent layer. This enables the system to proactively load the next layer's KVs using idle PCIe bandwidth while the current layer is still being computed. By overlapping these I/O operations with GPU execution, HyperInfer effectively hides the data loading latency and eliminates the GPU stalls typically caused by the dependency between token identification and KV loading.}
+\noindent
+\zrdnew{\textbf{Design.} Based on the above observations, we propose the layer-aware KV prefetching mechanism. The core idea is\textit{ to leverage the high similarity of importance distributions across adjacent layers to speculatively prefetch the next layer's critical KVs using idle PCIe bandwidth during the current layer's computation}. This pipelined execution effectively overlaps I/O with GPU processing, hiding data loading latency and eliminating the GPU stalls caused by read-after-compute dependencies.}
 
 \zrdnew{Figure 10 illustrates the impact of this mechanism on inference timelines. As shown in Figure 10(b), without prefetching, KV loading for Layer 1 must wait for token selection to complete, leaving the GPU idle. In contrast, Figure 10(c) shows that by using Layer 0’s importance information to guide the prefetching for Layer 1, the I/O latency is effectively hidden within the computation time of Layer 0, ensuring that KVs are readily available when the execution transitions to the next layer.}
 
-\zrdnew{While layer-aware KV prefetching effectively hides I/O latency, designing an efficient mechanism requires addressing two key challenges. First, using the current layer's important tokens to approximate those of the next layer is inherently speculative. Although similarity is high, inaccuracies are inevitable, necessitating a robust verification and recovery mechanism to ensure correctness without incurring high penalties. Second, prefetching I/O must be carefully scheduled. Since this is an opportunistic optimization utilizing idle PCIe bandwidth parallel to computation, the system must ensure that speculative loads do not interfere with the critical execution path or delay the subsequent demand loading of missing KVs.}
+\zrdnew{Implementing this mechanism requires addressing two key issues. First, using the current layer's important tokens to approximate those of the next layer is inherently speculative. Although similarity is high, inaccuracies are inevitable, necessitating a robust verification and recovery mechanism to ensure correctness without incurring high penalties. Second, prefetching I/O must be carefully scheduled. Since this is an opportunistic optimization utilizing idle PCIe bandwidth parallel to computation, the system must ensure that speculative loads do not interfere with the critical execution path or delay the subsequent demand loading of missing KVs.}
 
 \zrdnew{
-To address the first issue, we implement a speculate-then-verify workflow. During the computation of the current layer (Layer $i$), HyperInfer speculatively loads the KVs for Layer $i+1$ based on the importance ranking. As the execution transitions to Layer $i+1$, the system performs a lightweight verification step: it executes the similarity-guided identification (see \S IV-B) using the probe heads to determine the ground-truth important tokens. HyperInfer then calculates the set difference between the ground-truth set and the already prefetched KVs. Only the missing KVs (the delta) are synchronously loaded on the critical path. Since the volume of these missing KVs is typically much smaller than the full set required for demand loading, this recovery step incurs significantly lower latency. Even in the worst-case scenario where prefetching fails completely, the system simply falls back to standard demand loading, ensuring that the performance is bounded.}
+To address the first issue, we implement a speculate-then-verify workflow. During the computation of layer $i$, \pname{} speculatively loads KVs for layer $i+1$ into a dedicated prefetch buffer, prioritizing tokens with the highest importance scores. 
+Upon transitioning to layer $i+1$, the system performs a lightweight verification step: it executes the similarity-guided identification in \S\ref{sec:techa} to determine the ground-truth important tokens. HyperInfer then calculates the set difference between the ground-truth set and the already prefetched KVs. Only the missing KVs are synchronously loaded on the critical path. Since the volume of these missing KVs is typically much smaller than the full set required for demand loading, this recovery step incurs significantly lower latency. Even in the worst-case scenario where prefetching fails completely, the system simply falls back to standard demand loading (Figure~\ref{fig:simiload-ttft}(b)), ensuring that the performance is bounded.}
 
 %\cp{
 %To address the second issue, computation and prefetching I/O must be aligned in time, which requires accurate estimates of their durations. 
@@ -80,17 +82,16 @@ To address the first issue, we implement a speculate-then-verify workflow. Durin
 %}
 \zrdnew{To address the second issue, we implement a contention-aware scheduling strategy that precisely aligns prefetching I/O with computation.
 First, to determine the safe prefetching window, we leverage the structural homogeneity of Transformer layers. We employ a runtime heuristic that estimates the current layer's computation time using an exponential moving average (EMA) of the execution times from previous layers. This approach filters out transient system jitter and provides a robust time budget. To ensure safety, we set the prefetching deadline conservatively (e.g., 95\% of the estimated window) to prevent I/O from extending onto the critical path.
-Second, to prevent resource contention, we execute prefetching commands via asynchronous CUDA streams. This design isolates the I/O operations on the PCIe bus, which is orthogonal to the on-chip HBM bandwidth heavily utilized by the computation kernels. Consequently, speculative prefetching can saturate idle I/O bandwidth without interfering with the critical path execution of the current layer.}
+Second, to prevent resource contention, we execute prefetching commands via asynchronous CUDA streams. This design isolates the I/O operations on the PCIe bus, which is orthogonal to the HBM bandwidth heavily utilized by the computation kernels. Consequently, speculative prefetching can saturate idle I/O bandwidth without interfering with the critical path execution of the current layer.}
 
+\noindent
 \zrdnew{\textbf{Handling Mispredictions.} 
 	Since layer-aware prefetching is speculative, a small fraction of the loaded KVs may fall outside the target important token set of the next layer. 
 	HyperInfer enforces a strict policy to discard these mispredicted KVs, excluding them from the subsequent attention computation. 
 	We adopt this design choice for two reasons. 
-	First, it ensures \textit{performance determinism}. 
-	Including extra KVs would dynamically increase the sequence length, introducing variable computational overhead and memory consumption that could negate the latency benefits of prefetching. 
-	Second, it maintains \textit{resource efficiency}. 
-	Retaining mispredicted KVs would unnecessarily increase memory consumption and complicate runtime data management.
-	Although this approach discards data transferred via PCIe, this bandwidth was otherwise idle; thus, the speculation incurs \textit{zero opportunity cost} to the critical inference path while maintaining a rigorous and fair evaluation baseline.}
+	First, it ensures performance determinism. Including mispredicted KVs causes sequence lengths to fluctuate based on prediction accuracy. This leads to unpredictable latency jitter. Discarding them ensures the workload remains stable, which is crucial for meeting Service-Level Agreements (SLAs).
+	Second, it prevents overhead from negating prefetching benefits. Using extra tokens is not free as it increases matrix calculation time. This added computation cost could consume the time saved by prefetching. Discarding them ensures we hide I/O latency without slowing down the GPU computation.
+	Note that since these KVs were transferred using idle PCIe bandwidth, discarding them incurs zero opportunity cost to the critical path.}
 
 
 

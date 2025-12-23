@@ -41,7 +41,7 @@ The attention weights, computed from \( Q \) and \( K \), represent token releva
 \begin{figure}
 	\centering
 	\includegraphics[width=3.4in]{pkvloading.pdf}
-	\caption{\cp{The TTFTs of various cases. Assume the LLM model consists of three transformer layers, denoted as `Lx'.}}
+	\caption{\zrdnew{The TTFTs of various cases. Assume the LLM model consists of three transformer layers, denoted as `Lx'.}}
 	\label{fig:pkvloading}
 \end{figure}
 
@@ -58,7 +58,7 @@ For example, Retrieval-Augmented Generation (RAG)~\cite{rag-nips20} retrieves ex
 %Besides, it also degrades the system's overall throughput and increases the enterprise costs.	
 %This paper focuses on reducing TTFT during the prefill phase without altering the decoding phase. Note that shortening TTFT also reduces decoding latency for other requests, as modern systems use continuous batching, where the decoding of existing and newly-arrived requests are processed together after the completion of the prefill of the new requests~\cite{orca-osdi22}.
 
-\noindent \textbf{Mitigating latency via Prefix KV reuse.}
+\noindent \textbf {\zrdnew{Mitigating latency via Prefix KV reuse.}}
 Researchers have observed that these prefixes are often partially or completely shared across different requests~\cite{sglang-arxiv23, chunkattention-arxiv24, cachegen-sigcomm24, ragcache-arxiv24, promptcache-mlsys24, attentionstore-atc24}. For example, similar queries might retrieve partially or entirely the same related documents using RAG; the same GPT plugin can be used multiple times, resulting in identical system prompts across requests. 
 Recomputing the K and V tensors in Figure~\ref{fig:llm} for the same prefix leads to wasted computational resources and increased TTFT. To optimize TTFT, existing systems store and reuse the K and V tensors of these shared prefixes (referred to as \textit{prefix KV cache} or simply \textit{prefix KV}). Note that the Q tensor of the prefix is not stored, as it is not needed for subsequent computations~\cite{attentionstore-atc24}. When a new request with a repeated prefix arrives, the system asynchronously preloads its prefix KVs into GPU memory, thereby reducing TTFT during the prefill phase of the new request.
 \begin{figure}
@@ -71,7 +71,8 @@ Recomputing the K and V tensors in Figure~\ref{fig:llm} for the same prefix lead
 	\label{fig:pload-bottleneck}
 	\vspace{-0.15in}
 \end{figure}
-\zrdnew{\subsection{Limitations of Existing Prefix KV Management Systems}}
+
+\subsection{\zrdnew{Limitations of Existing Prefix KV Management Systems}}
 %\begin{table}[t]
 %	\centering
 %	\caption{\cp{Comparison of prefix KV storage designs.}}
@@ -92,7 +93,7 @@ Recomputing the K and V tensors in Figure~\ref{fig:llm} for the same prefix lead
 %			\specialrule{1.2pt}{0pt}{2pt}
 %		\end{tabular}
 %\end{table}
-
+\label{sec:limit}
 \zrdnew{An effective prefix KV management system must satisfy two key requirements. First, it must provide sufficient storage capacity to hold a large number of prefix KVs. Second, it must ensure low latency for retrieving prefix KVs, as excessive loading delay can become a bottleneck in LLM inference and limit the reduction of TTFT.
 To achieve these goals, techniques such as caching, prefetching, and importance-aware retrieval are often employed. However, existing systems fail to satisfy both requirements simultaneously. They typically prioritize either low latency at the expense of storage capacity or provide sufficient capacity but suffer from high I/O latency.}
 

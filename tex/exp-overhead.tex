@@ -28,6 +28,7 @@
 % %This is because there are only three probe heads, so the required loading and computation are minimal.
 % Additionally, the \techba{} technique sorts tokens by importance and repacks them to disk. The total execution time in our experiments is under one minute. Note that this process is asynchronous and does not affect TTFT, as it is not part of the critical path.
 The \techa{} technique in \pname{} loads keys from the probe heads to determine the important token index set. While this adds some I/O and computation overhead, it averages only 6\% of our system's overhead due to the limited number of probe heads, resulting in minimal loading and computation.
+\zrdnew{For layer-aware prefetching, the runtime verification incurs negligible latency. This operation involves simple index comparisons executed in microseconds, which is orders of magnitude faster than the millisecond-level disk I/O latency it helps to avoid.}
 Furthermore, \techba{} asynchronously sorts tokens by importance and repacks them onto disk, with a total experimental execution time of less than one minute. This process is non-intrusive to TTFT as it operates outside the critical path.
 
 \noindent \textbf{Space overhead.} 
@@ -36,6 +37,7 @@ Furthermore, \techba{} asynchronously sorts tokens by importance and repacks the
 \fvc{
 \techba{} adds a mapping list to each chunk's metadata for token position mappings post-reordering. Score-based cache management adds a score per chunk. With a 64-token chunk size, these additions account for less than 0.5\% of the chunk's memory. 
 }
+\zrdnew{The prefetch buffer is small because it only stores one layer of KVs at a time. It does not take up space from the main KV cache.}
 Additionally, to avoid loading data from other heads when loading keys from the probe heads, we redundantly store the keys from the probe heads separately. 
 This accounts for 1.2\% of the total storage of all prefix KVs, which is a minimal cost considering high-capacity disks.
 %Additionally, to shorten the keys from probe heads loading time, \pname{} redundantly stores them on disk, avoiding wasted disk I/O bandwidth from other heads in the same chunk. The disk space consumed by these redundant probe head stores is 1.2\% of the total prefix KV storage, which is a minimal cost considering the availability of cheap, high-capacity disks.

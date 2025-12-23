@@ -14,9 +14,9 @@
 	\caption{The recall ratios and the impacts on model generation quality of the static pre-identification method (SPI) under various important token retention percentages. `ORI' denotes the baseline where the SPI method is not applied.}
 	\label{fig:static_methods}
 \end{figure}
-\zrdnew{To satisfy these requirements, we propose HyperInfer.
+\zrdnew{To satisfy the dual requirements of scalable storage capacity and low retrieval latency established in \S\ref{sec:limit}, we propose HyperInfer.
 HyperInfer minimizes retrieval latency by selectively loading only critical KVs to reduce data volume, and further speculatively prefetching these KVs for future layers to hide I/O overhead.
-However, realizing such an efficient system presents three significant challenges:}
+However, building such an efficient system presents three significant challenges:}
 
 \noindent \textbf{Challenge 1: Importance identification introduces high I/O overhead for prefix KV loading.}
 \fvc{Existing methods identify important KVs by loading all prefix keys (K) into GPU memory~\cite{h2o-nips23, infinigen-osdi24, flexgen-icml23, scissorhands-nips23}, 
