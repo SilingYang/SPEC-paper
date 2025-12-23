@@ -37,10 +37,10 @@ spaces are exclusive to avoid space wastage. The metadata in the CPU memory is
 organized using a radix tree~\cite{sglang-arxiv23}, which facilitates quick
 searches for the reusable prefix KVs. The runtime space stores
 model parameters and intermediate data needed for GPU inference.
-\zrdnew{\pname{} has three control components: important token identification (\S\ref{sec:techa}), layer-aware KV prefetching (\S\ref{sec:technew}), and prefix KV placement (\S\ref{sec:techb}). 
-The token identification module identifies important tokens within a chunk by loading only partial keys rather than all of them, reducing the amount of data loaded from disks. 
-The prefetching module proactively loads critical KVs for future layers during current computation to hide I/O overhead.
-The KV placement module manages the storage and data movement of prefix KVs across disks and the two cache spaces to maximize cache efficiency.}
+\zrdnew{\pname{} has three control components: Important Token Identification (\S\ref{sec:techa}), Layer-Aware KV Prefetching (\S\ref{sec:technew}), and Importance-Informed KV Placement (\S\ref{sec:techb}). 
+The Important Token Identification module identifies important tokens within a chunk by loading only partial keys rather than all of them, reducing the amount of data loaded from disks. 
+The Layer-Aware KV Prefetching module proactively loads critical KVs for future layers during current computation to hide I/O overhead.
+The Importance-Informed KV Placement module manages the storage and data movement of prefix KVs across disks and the two cache spaces to maximize cache efficiency.}
 
 \begin{figure}
 	\centering
@@ -71,7 +71,7 @@ The KV placement module manages the storage and data movement of prefix KVs acro
 	First, the system queries the radix tree to retrieve the longest cached prefix data (stored in GPU, CPU, or disk) that matches the current request~\cite{sglang-arxiv23, chunkattention-arxiv24}.
 	Instead of retrieving all data upfront, \pname{} processes the matched prefix in a layer-wise pipeline.
 	For the current layer, it employs the similarity-guided identification method (\S\ref{sec:techa}) to filter out unimportant tokens.
-	Crucially, to mask I/O latency, this process executes concurrently with computation: during the GPU computation of the current layer, the layer-aware prefetcher (\S\ref{sec:technew}) speculatively loads the essential KVs for the next layer from lower storage tiers.
+	Crucially, to hide I/O latency, this process executes concurrently with computation: during the GPU computation of the current layer, the layer-aware prefetcher (\S\ref{sec:technew}) speculatively loads the essential KVs for the next layer from lower storage tiers.
 	This effectively hides the I/O latency behind the GPU computation.
 	Any speculatively loaded KVs that are later verified as unimportant are discarded to save memory.
 	After processing the prefix, the system computes the remaining non-prefix tokens and enters the standard decoding phase~\cite{alluneed-nips17}.

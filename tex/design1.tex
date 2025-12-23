@@ -276,8 +276,12 @@ Given that modern LLMs have dozens of heads and long prefixes, \techa{} effectiv
 	\centering
 	\includegraphics[width=3.4in]{simiload-ttft.pdf}
 	\caption{\zrdnew{
-			Timeline breakdown of TTFT. (a) Without \techa{}. (b) With \techa{}, where black dashed arrows indicate the strict read-after-compute dependency. (c) With \technew, where red-bordered rectangles indicate loading missing KVs. Assume the LLM model consists
-			of three transformer layers. The numbers inside rectangles represent the layer index.}}
+%			Timeline breakdown of TTFT. (a) Without \techa{}. (b) With \techa{}, where black dashed arrows indicate the strict read-after-compute dependency. (c) With \technew, where red-bordered rectangles indicate loading missing KVs. Assume the LLM model consists
+%			of three transformer layers. The numbers inside rectangles represent the layer index.
+Timeline breakdown of TTFT across three transformer layers (layer indices shown in rectangles). 
+(a)~Without \techa{}. 
+(b)~With \techa{} (black dashed arrows: read-after-compute dependency). 
+(c)~With \technew{} (red borders: loading of missing KVs).}}
 	\label{fig:simiload-ttft}
 \end{figure}
 
