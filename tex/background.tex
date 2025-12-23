@@ -41,7 +41,7 @@ The attention weights, computed from \( Q \) and \( K \), represent token releva
 \begin{figure}
 	\centering
 	\includegraphics[width=3.4in]{pkvloading.pdf}
-	\caption{\zrdnew{The TTFTs of various cases. Assume the LLM model consists of three transformer layers, denoted as `Lx'.}}
+	\caption{\zrdnew{The TTFTs of various cases. Assume the LLM model consists of three transformer layers, denoted as ``Lx''.}}
 	\label{fig:pkvloading}
 \end{figure}
 
@@ -66,7 +66,7 @@ Recomputing the K and V tensors in Figure~\ref{fig:llm} for the same prefix lead
 	\includegraphics[width=3.3in, height=1.55in]{pload_bottleneck.pdf}
 	\vspace{-0.1in}
 	\caption{TTFT breakdown.
-				`ReComp' refers to not reusing the prefix KV. `QueryComp' denotes the remaining computation after loading the prefix KV. }
+				``ReComp'' refers to not reusing the prefix KV. ``QueryComp''  denotes the remaining computation after loading the prefix KV. }
 %	\vspace{-0.1in}
 	\label{fig:pload-bottleneck}
 	\vspace{-0.15in}
@@ -120,16 +120,18 @@ To mitigate this, AttentionStore employs layer-wise prefetching to overlap data 
 with the current layer's computation, as shown in Figure~\ref{fig:pkvloading}(d). 
 Despite these prefetching efforts, the system remains severely bottlenecked by the limited I/O bandwidth of SSDs and PCIe.
 Consequently, the massive data transfer latency cannot be fully hidden by computation, 
-especially under heavy or preemptive workloads. As evidenced in Figure~\ref{fig:pload-bottleneck}, 
-loading prefix KVs from SSD leads to a substantial increase in TTFT,  where I/O latency accounts for 51\% to 98\% of the total time.}
+especially under heavy or preemptive workloads. 
+Our study shows that loading prefix KVs from SSD leads to a substantial increase in TTFT, with I/O latency accounting for 51\% to 98\% of the total TTFT, as evidenced in Figure~\ref{fig:pload-bottleneck}.}
+%As evidenced in Figure~\ref{fig:pload-bottleneck}, 
+%loading prefix KVs from SSD leads to a substantial increase in TTFT,  where I/O latency accounts for 51\% to 98\% of the total time.}
 
 \noindent
 \zrdnew{\noindent \textbf{Importance-Aware Systems: The Serial Dependency.}  
 To address the bandwidth bottleneck, IMPRESS~\cite{impress-fast25} employs importance-informed sparse retrieval, effectively minimizing the I/O volume.
-However, this selectivity comes at the cost of parallelism.
-The identification of important KVs for the next layer relies on the runtime attention activation of the current layer, forming a strict read-after-compute dependency.
-This dependency renders the standard layer-wise prefetching mechanism inapplicable, as the system cannot determine target KVs in advance.
-As a result, I/O operations cannot be overlapped with computation and remain exposed on the critical path, as shown in Figure~\ref{fig:pkvloading}(e), limiting the potential reduction in TTFT.}
+However, this selectivity sacrifices parallelism: identifying important KV pairs for the next layer depends on the attention activations computed at runtime in the current layer, introducing a strict read-after-compute dependency.  This serial dependency invalidates conventional layer-wise prefetching, as the system cannot determine which KV blocks to fetch in advance.
+%The identification of important KVs for the next layer relies on the runtime attention activation of the current layer, forming a strict read-after-compute dependency.
+%This dependency renders the standard layer-wise prefetching mechanism inapplicable, as the system cannot determine target KVs in advance.
+Consequently, I/O operations cannot be overlapped with computation and remain on the critical path, as shown in Figure~\ref{fig:pkvloading}(e), thereby limiting potential TTFT reduction.}
 
 
 
