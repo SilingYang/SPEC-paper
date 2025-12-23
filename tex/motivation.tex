@@ -16,7 +16,7 @@
 \end{figure}
 \zrdnew{To satisfy the dual requirements of scalable storage capacity and low retrieval latency established in \S\ref{sec:limit}, we propose HyperInfer.
 HyperInfer minimizes retrieval latency by selectively loading only critical KVs to reduce data volume, and further speculatively prefetching these KVs for future layers to hide I/O overhead.
-However, building such an efficient system presents three significant challenges:}
+However, building such an efficient system entails three significant challenges:}
 
 \noindent \textbf{Challenge 1: Importance identification introduces high I/O overhead for prefix KV loading.}
 \fvc{Existing methods identify important KVs by loading all prefix keys (K) into GPU memory~\cite{h2o-nips23, infinigen-osdi24, flexgen-icml23, scissorhands-nips23}, 
@@ -75,7 +75,7 @@ These results motivate a dynamic approach that identifies important tokens per q
 
 \noindent 
 \zrdnew{
-\textbf{Challenge 2: Serial dependencies hinder effective prefetching}
+\textbf{Challenge 2: Serial dependencies hinder effective prefetching.}
 Current systems face a dilemma between bandwidth efficiency and latency hiding.
 Aggressive prefetching methods~\cite{attentionstore-atc24} overlap I/O by loading the entire next layer, but this incurs prohibitive bandwidth costs and cache pollution.
 Conversely, selective loading methods such as IMPRESS~\cite{impress-fast25} minimize data volume but are constrained by strict data dependencies.
@@ -87,7 +87,7 @@ One potential strategy to bypass this dependency is to prefetch KVs based on glo
 Under this method using history, KVs that were frequently selected in past requests are prioritized. 
 However, KV importance is highly dependent on the query: a token critical for one query may be irrelevant for another, rendering a single global importance score an unreliable proxy for the needs of each request. 
 Moreover, accumulating reliable statistics for each KV requires extensive warm up and assumes a stationary workload distribution. 
-In \S\ref{exp:prefetch}, we empirically demonstrate that this heuristic driven by history significantly underperforms our method in both prefetch precision and I/O reduction under the same budget.
+In \S\ref{exp:prefetch}, we empirically demonstrate that this history-based heuristic significantly underperforms our method in both prefetch precision and I/O reduction under the same budget.
 }
 %\zrdnew{
 %\textbf{Challenge 2: Prefetching mitigates KV loading latency but is infeasible when the important tokens are unknown prior to execution.}
