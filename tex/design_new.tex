@@ -76,7 +76,8 @@ To understand the nature of inter-layer consistency in token importance, we exam
 
 \zrdnew{
 To address the first issue, we implement a speculate-then-verify workflow. During the computation of layer $i$, \pname{} speculatively loads KVs for layer $i+1$ into a dedicated prefetch buffer, prioritizing tokens with the highest importance scores. 
-Upon transitioning to layer $i+1$, the system performs a lightweight verification step: it executes the similarity-guided identification in \S\ref{sec:techa} to determine the ground-truth important tokens. HyperInfer then calculates the set difference between the ground-truth set and the already prefetched KVs. Only the missing KVs are synchronously loaded on the critical path. Since the volume of these missing KVs is typically much smaller than the full set required for demand loading, this recovery step incurs significantly lower latency. Even in the worst-case scenario where prefetching fails completely, the system simply falls back to standard demand loading (Figure~\ref{fig:simiload-ttft}(b)), ensuring that the performance is bounded.}
+Upon transitioning to layer $i+1$, the system performs a lightweight verification step: it executes the similarity-guided identification in \S\ref{sec:techa} to determine the ground-truth important tokens. HyperInfer then calculates the set difference between the ground-truth set and the already prefetched KVs. Only the missing KVs are synchronously loaded on the critical path. Since the volume of these missing KVs is typically much smaller than the full set required for demand loading, this recovery step incurs significantly lower latency. Even in the worst-case scenario where prefetching fails completely, the system simply falls back to standard demand loading (Figure~\ref{fig:simiload-ttft}(b)), ensuring that the performance is bounded.
+}
 
 %\cp{
 %To address the second issue, computation and prefetching I/O must be aligned in time, which requires accurate estimates of their durations. 
@@ -90,16 +91,20 @@ Upon transitioning to layer $i+1$, the system performs a lightweight verificatio
 %During prefetching, chunks are loaded in descending order of token importance until the prefetching time window  is filled, ensuring that prefetching aligns closely with computation and effectively hides I/O latency.
 %}
 \zrdnew{To address the second issue, we implement a contention-aware scheduling strategy that precisely aligns prefetching I/O with computation.
-First, to determine the safe prefetching window, we leverage the structural homogeneity of Transformer layers. We employ a runtime heuristic that estimates the current layer's computation time using an exponential moving average (EMA) of the execution times from previous layers. This approach filters out transient system jitter and provides a robust time budget. To ensure safety, we set the prefetching deadline conservatively (e.g., 95\% of the estimated window) to prevent I/O from extending onto the critical path.
-Second, to prevent resource contention, we execute prefetching commands via asynchronous CUDA streams. This design isolates the I/O operations on the PCIe bus, which is orthogonal to the HBM bandwidth heavily utilized by the computation kernels. Consequently, speculative prefetching can saturate idle I/O bandwidth without interfering with the critical path execution of the current layer.}
+First, to determine the safe prefetching window, we leverage the structural homogeneity of Transformer layers. We employ a runtime heuristic that estimates the current layer's computation time using an exponential moving average  of the execution times from previous layers. This approach filters out transient system jitter and provides a robust time budget. To ensure safety, we set the prefetching deadline conservatively (e.g., 95\% of the estimated window) to prevent I/O from extending onto the critical path.
+%Second, to prevent resource contention, we execute prefetching commands via asynchronous CUDA streams. 
+Second, to mitigate resource contention, we issue prefetching commands through asynchronous CUDA streams. This isolates PCIe-based I/O from the HBM bandwidth heavily utilized by compute kernels, as the two resources are largely orthogonal.  
+%This design isolates the I/O operations on the PCIe bus, which is orthogonal to the HBM bandwidth heavily utilized by the computation kernels. 
+As a result, speculative prefetching can saturate idle I/O bandwidth without interfering with the critical path execution of the current layer.}
 
 \noindent
 \zrdnew{\textbf{Handling Mispredictions.} 
 	Since layer-aware prefetching is speculative, a small fraction of the loaded KVs may fall outside the target important token set of the next layer. 
 	HyperInfer enforces a strict policy to discard these mispredicted KVs, excluding them from the subsequent attention computation. 
 	We adopt this design choice for two reasons. 
-	First, it ensures performance determinism. Including mispredicted KVs causes sequence lengths to fluctuate based on prediction accuracy. This leads to unpredictable latency jitter. Discarding them ensures the workload remains stable, which is crucial for meeting Service-Level Agreements (SLAs).
-	Second, it prevents overhead from negating prefetching benefits. Using extra tokens is not free as it increases matrix calculation time. This added computation cost could consume the time saved by prefetching. Discarding them ensures we hide I/O latency without slowing down the GPU computation.
+(1)It ensures performance determinism. Including mispredicted KVs causes sequence lengths to fluctuate based on prediction accuracy, introducing latency jitter that jeopardizes Service-Level Agreements (SLAs). By discarding them, we maintain a stable computational workload.
+	%This leads to unpredictable latency jitter. Discarding them ensures the workload remains stable, which is crucial for meeting Service-Level Agreements (SLAs).
+(2) It prevents overhead from negating prefetching benefits.Incorporating extra tokens incurs non-negligible overhead: longer sequences increase attention matrix computation time, which can offset or even erase the latency savings from I/O hiding. Discarding them ensures we hide I/O latency without slowing down the GPU computation.
 	Note that since these KVs were transferred using idle PCIe bandwidth, discarding them incurs zero opportunity cost to the critical path.}
 
 
